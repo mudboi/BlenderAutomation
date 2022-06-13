@@ -244,4 +244,4 @@ fabric.properties
 # Custom ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #Don't take local scratch files
-scratch/**/
+scratch/**/*
