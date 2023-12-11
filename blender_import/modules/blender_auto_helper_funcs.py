@@ -103,7 +103,7 @@ def calc_foot_speed(act=None, feet_name='foot_ik'):
         act = bpy.data.actions[act]
     out = {}
     for ft in [feet_name + '.R', feet_name + '.L']:
-        out[ft] = {'x_delta': None, 'y_delta': None, 't_delta': None, 'x_speed': None, 'y_speed': None}
+        out[ft] = {'x_delta': None, 'y_delta': None, 't_delta': None, 'x_speed': None, 'y_speed': None, 'speed_mag': None}
         fc_x = act.fcurves.find('pose.bones["%s"].location' % ft, index=0)
         fc_y = act.fcurves.find('pose.bones["%s"].location' % ft, index=1)
         t_vals = [None, None]
@@ -131,6 +131,18 @@ def calc_foot_speed(act=None, feet_name='foot_ik'):
         out[ft]['y_speed'] = out[ft]['y_delta']/out[ft]['t_delta']
         out[ft]['speed_mag'] = math.sqrt(out[ft]['x_speed']**2 + out[ft]['y_speed']**2)
     return out
+
+
+def disp_all_action_foot_speed(feet_name='foot_ik'):
+    rig_obj = blender_auto_common.find_object_in_mode('POSE')  # Get current pose mode rig0
+    for nla_track in rig_obj.animation_data.nla_tracks:
+        if len(nla_track.strips) > 0:
+            act_name = nla_track.strips[0].action.name
+            foot_speed = calc_foot_speed(act_name, feet_name)
+            if (foot_speed[feet_name+".L"]['speed_mag'] is None or foot_speed[feet_name+".R"]['speed_mag'] is None):
+                continue
+            print(act_name + ":")
+            print("    LF: %.4f  RF: %.4f" % (foot_speed[feet_name+".L"]['speed_mag'], foot_speed[feet_name+".R"]['speed_mag']) )
 
 
 def blend_feet_locations(act_prefix, move_angle, move_speed, foot_name='foot_ik',
