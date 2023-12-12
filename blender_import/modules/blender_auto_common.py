@@ -33,6 +33,20 @@ def find_object_in_mode(mode, raise_if_missing=True, context=None):
     return mode_obj
 
 
+def get_export_armature():
+    """ Get first armature that is in a collection called 'Export' or None if one not found.
+
+    This is useful for getting the send2ue armature that contains all the unreal export animations"""
+    export_col = None
+    try:
+        export_col = bpy.data.collections['Export']
+    except KeyError:
+        return None
+    for obj in export_col.objects:
+        if obj.type == 'ARMATURE':
+            return obj.data
+    return None
+
 def push_action_to_nla(rig_obj):
     """Push 'rig_obj's active action to NLA"""
     act = rig_obj.animation_data.action  # Get current action
