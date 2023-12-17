@@ -5,18 +5,6 @@ from collections import OrderedDict
 import blender_auto_common
 
 
-bl_info = {
-    "name": "Create Game Rig",
-    "author": "Inderbir Sidhu",
-    "version": (1, 0, 1),
-    "blender": (2, 93, 0),
-    "location": "View3D > Add > Armature > Game Rig",
-    "description": "Create a game-ready rig from a Rigify rig",
-    "warning": "",
-    "category": "Rigging",
-}
-
-
 class EditBoneCopier:
     """Class to copy edit bones attributes.
 
@@ -51,9 +39,6 @@ class EditBoneCopier:
                 self.ctrl_rig_attrs[ctrl_bone.name][at] = getattr(ctrl_bone, at).copy()
             else:
                 self.ctrl_rig_attrs[ctrl_bone.name][at] = getattr(ctrl_bone, at)
-
-
-# MAIN CLASSES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 class CreateGameRig(bpy.types.Operator):
@@ -200,7 +185,7 @@ class CreateGameRig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def menu_func(self, _):
+def armature_add_menu_func(self, _):
     """Draws menu (passed to blender)"""
     self.layout.operator(CreateGameRig.bl_idname)
 
@@ -208,12 +193,10 @@ def menu_func(self, _):
 def register():
     """Registers this add-on to blender if user selected (called by blender)"""
     bpy.utils.register_class(CreateGameRig)
-    bpy.types.VIEW3D_MT_armature_add.append(menu_func)
 
 
 def unregister():
     """Unregisters this add-on is user de-selected"""
-    bpy.types.VIEW3D_MT_armature_add.remove(menu_func)
     bpy.utils.unregister_class(CreateGameRig)
 
 

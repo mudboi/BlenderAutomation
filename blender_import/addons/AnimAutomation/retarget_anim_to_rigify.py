@@ -3,18 +3,6 @@ import bpy
 import blender_auto_common
 
 
-bl_info = {
-    "name": "Retarget Anims to Rigify",
-    "author": "Inderbir Sidhu",
-    "version": (1, 0, 0),
-    "blender": (3, 3, 1),
-    "location": "View3D > Pose > Retarget Anims to Rigify",
-    "description": "Retargets all selected anims in NLA Tracks of an armature to Rigify Rig's NLA Tracks",
-    "warning": "",
-    "category": "Animation"
-}
-
-
 class RetargetAnimsToRigify(bpy.types.Operator):
     """Retargets all SELECTED animations in NLA Tracks of a specified armature to this Rigify rig's NLA Tracks.
 
@@ -201,21 +189,18 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def menu_func(self, _):
-    """Draws menu (passed to blender)"""
-    self.layout.separator()
+def pose_menu_func(self, _):
+    """Draws pose menu (passed to blender) for this operator"""
     self.layout.operator(RetargetAnimsToRigify.bl_idname)
 
 
 def register():
     """Registers this add-on to blender if user selected (called by blender)"""
     bpy.utils.register_class(RetargetAnimsToRigify)
-    bpy.types.VIEW3D_MT_pose.append(menu_func)
 
 
 def unregister():
     """Unregisters this add-on is user de-selected"""
-    bpy.types.VIEW3D_MT_pose.remove(menu_func)
     bpy.utils.unregister_class(RetargetAnimsToRigify)
 
 

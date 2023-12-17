@@ -4,18 +4,6 @@ import math
 import blender_auto_common
 
 
-bl_info = {
-    "name": "Batch Bake Anims to Rig",
-    "author": "Inderbir Sidhu",
-    "version": (1, 0, 4),
-    "blender": (2, 93, 0),
-    "location": "View3D > Pose > Batch Animation Bake to Rig",
-    "description": "Bakes all selected animations in NLA Tracks of a Rig to another Rig's NLA Tracks",
-    "warning": "",
-    "category": "Animation",
-}
-
-
 class BatchBakeAnimsToRig(bpy.types.Operator):
     """Bakes all SELECTED animations in NLA Tracks of another Rig this rig's NLA Tracks to this rig.
 
@@ -174,21 +162,18 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def menu_func(self, _):
-    """Draws menu (passed to blender)"""
-    self.layout.separator()
+def pose_menu_func(self, _):
+    """Draws pose menu entry for this operator (passed to blender)"""
     self.layout.operator(BatchBakeAnimsToRig.bl_idname)
 
 
 def register():
     """Registers this add-on to blender if user selected (called by blender)"""
     bpy.utils.register_class(BatchBakeAnimsToRig)
-    bpy.types.VIEW3D_MT_pose.append(menu_func)
 
 
 def unregister():
     """Unregisters this add-on is user de-selected"""
-    bpy.types.VIEW3D_MT_pose.remove(menu_func)
     bpy.utils.unregister_class(BatchBakeAnimsToRig)
 
 
