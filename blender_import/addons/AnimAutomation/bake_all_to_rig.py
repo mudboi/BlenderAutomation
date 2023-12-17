@@ -55,16 +55,6 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             print("    Overwrite: deleting NLA track: " + tr.name + " for action: " + action.name)
             obj.animation_data.nla_tracks.remove(tr)
 
-    @staticmethod
-    def toggle_game_rig_constraints(game_rig_obj, enable):
-        """ Toggle game rig loc/rot constraints to ctrl rig on or off depending on enable"""
-        toggle = "ON" if enable else "OFF"
-        print("    Toggling game rig constraints " + toggle)
-        for bone in game_rig_obj.pose.bones:
-            for cnst in bone.constraints:
-                if cnst.type == 'COPY_LOCATION' or cnst.type == 'COPY_ROTATION':
-                    cnst.enabled = enable
-
     def bake_ctrl_rig_track_to_game_rig(self, ctrl_track, game_rig_obj, context):
         """ Bake ctrl_track which should be an NLA track in ctrl rig to game_rig_obj NLA track.
 
@@ -137,7 +127,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
 
         # itterate over all NLA tracks in ctrl rig and bake animation from strips to game rig
         print("Baking actions ...")
-        self.toggle_game_rig_constraints(game_rig_obj, True)
+        blender_auto_common.toggle_rig_constraints(True, game_rig_obj, blender_auto_common.game_to_ctrl_constraint_pref)
         bpy.ops.pose.select_all(action='SELECT')  # Need to select all bones to Bake Anim
         for ctrl_track in ctrl_rig_obj.animation_data.nla_tracks:
             baked_action = self.bake_ctrl_rig_track_to_game_rig(ctrl_track, game_rig_obj, context)
@@ -149,12 +139,15 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
 
         if sending_to_unreal:
             print("Sending to Unreal ...")
-            self.toggle_game_rig_constraints(game_rig_obj, False)
+            blender_auto_common.toggle_rig_constraints(False, game_rig_obj,
+                                                       blender_auto_common.game_to_ctrl_constraint_pref)
             try:
                 bpy.ops.wm.send2ue()
             except AttributeError:
                 print("Can't send to unreal, could not find send2ue addon")
-            self.toggle_game_rig_constraints(game_rig_obj, True)
+            blender_auto_common.toggle_rig_constraints(True, game_rig_obj,
+                                                       blender_auto_common.game_to_ctrl_constraint_pref)
+        print("Finished Baking Actions")
         return {'FINISHED'}
 
     def invoke(self, context, event):

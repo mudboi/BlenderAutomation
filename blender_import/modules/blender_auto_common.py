@@ -4,6 +4,10 @@ import mathutils
 from collections import OrderedDict
 
 
+game_to_ctrl_constraint_pref = "CtrlRigConst_"
+anim_retgt_copy_rig_constraint_pref = "CtrlRigCopyConst_"
+
+
 class RigifyLimbIKBakeSettings:
     def __init__(self, prop_bone='', fk_bones='[]', ik_bones='[]', ctrl_bones='[]', tail_bones='[]', extra_ctrls='[]'):
         self.prop_bone = prop_bone
@@ -36,7 +40,6 @@ def switch_to_mode(obj, mode, context=None):
 
     NOTE: Will deselect any currently selected and/or activated objects and leave
     object selected and activated"""
-    bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)  # Need to select AND activate obj to switch modes
     if context:
         context.view_layer.objects.active = obj
@@ -77,6 +80,17 @@ def get_export_armature():
     return None
 
 
+def move_obj_to_coll(context, obj, coll_name, raise_if_err=False):
+    tgt_coll = context.scene.collection.children.get("Extra")
+    if not tgt_coll:
+        if raise_if_err:
+            raise Exception("Could not move obj: " + obj.name + ", no collection exists for: " + coll_name)
+        return
+    for coll in obj.users_collection:
+        coll.objects.unlink(obj)
+    tgt_coll.objects.link(obj)
+
+
 def push_action_to_nla(rig_obj):
     """Push 'rig_obj's active action to NLA"""
     act = rig_obj.animation_data.action  # Get current action
@@ -85,35 +99,20 @@ def push_action_to_nla(rig_obj):
     rig_obj.animation_data.action = None  # Unlink the action as active action
 
 
-def toggle_constrain_bones_rig_to_rig(constrain, src_rig, constrain_rig, bones, verbose=True):
-    """Constrain or unconstrain the bones specified by bones in constrain_rig to corresponding bones in src_rig
+def toggle_rig_constraints(enable, constrain_rig, pref_identifier, bone_names=None):
+    """Toggle constraints id'ed by pref_identifier for all bones in rig, or just bones in bone_names if specified
 
-    Note: corresponding bones have to be named identical in both rigs. Removes all other bone constraints from
-    bones not used for constraining them"""
-    for bone_name in bones:
-        cnst_bone_ind = constrain_rig.pose.bones.find(bone_name)
-        src_bone_ind = src_rig.pose.bones.find(bone_name)
-        if cnst_bone_ind < 0 or src_bone_ind < 0:
-            if verbose:
-                print("Could not find bone: " + bone_name + " in  either constrain rig or source rig")
-            continue
-        if verbose:
-            toggle = "ON" if constrain else "OFF"
-            print("Toggling constraints " + toggle + " for: " + bone_name)
-        cnst_bone = constrain_rig.pose.bones[cnst_bone_ind]
-        src_bone = src_rig.pose.bones[src_bone_ind]
-        for cnst in cnst_bone.constraints:
-            if verbose:
-                print("    Removing constraint: " + cnst.type + ": " + cnst.name)
-            cnst_bone.constraints.remove(cnst)
-        loc = cnst_bone.constraints.new(type="COPY_LOCATION")
-        loc.target = src_rig
-        loc.subtarget = src_bone.name
-        loc.enabled = constrain
-        rot = cnst_bone.constraints.new(type="COPY_ROTATION")
-        rot.target = src_rig
-        rot.subtarget = src_bone.name
-        rot.enabled = constrain
+    pref_identifier for example could be game_to_ctrl_constraint_pref, and this function will go through all
+    constraints in bones and enable or disable game rig to control rig loc/rot constraints. This method does not
+    add or remove any constraints, and will not disable/enable any other constraints besides the ones identified
+    by pref_identifier."""
+    for bone in constrain_rig.pose.bones:
+        if bone_names:
+            if bone.name not in bone_names:
+                continue
+        for cnst in bone.constraints:
+            if cnst.name[:len(pref_identifier)] == pref_identifier:
+                cnst.enabled = enable
 
 
 def traverse_bone_heirarchy(bn, operator, method):
