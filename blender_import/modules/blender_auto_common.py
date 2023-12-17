@@ -31,42 +31,6 @@ class RigifyLimbIKBakeSettings:
             raise Exception("Could not parse limb IK bake setting bone list") from se
 
 
-class EditBoneCopier:
-    """Class to copy edit bones attributes.
-
-    Attributes to copy are listed in the class variable 'attrs_to_copy'. Will fill
-    out an OrderedDict, 'ctrl_rig_attrs', with all attribute data from all bones passed to
-    'copy_edit_bone_data()' method, keys will be bone names, vals will be a dict with
-    attribute name: attribute value"""
-    attrs_to_copy = ['envelope_distance', 'envelope_weight', 'head', 'head_radius',
-                     'inherit_scale', 'tail', 'tail_radius', 'use_connect', 'roll',
-                     'use_deform', 'use_endroll_as_inroll', 'use_envelope_multiply',
-                     'use_inherit_rotation', 'use_local_location', 'use_relative_parent']
-
-    def __init__(self):
-        self.ctrl_rig_attrs = OrderedDict()
-
-    def copy_edit_bone_data(self, ctrl_bone):
-        """Copy edit bone data from 'ctrl_bone' and stores in 'ctrl_rig_attrs'.
-
-        'ctrl_bone' MUST be an edit bone, and passed in whatever order desired, this
-        class will keep track of that order through the use of an OrderedDict to
-        store the copied data.
-        """
-        self.ctrl_rig_attrs[ctrl_bone.name] = {}
-        if ctrl_bone.parent:  # Check if bone has parent and get name str
-            self.ctrl_rig_attrs[ctrl_bone.name]['parent'] = ctrl_bone.parent.name
-        else:
-            self.ctrl_rig_attrs[ctrl_bone.name]['parent'] = None
-        for at in self.attrs_to_copy:  # iter over attr_to_copy and copy values
-            if type(getattr(ctrl_bone, at)) is mathutils.Vector:
-                # Blender deallocates memory for vectors and matrices when leaving edit
-                #     mode, so need to make a copy to store
-                self.ctrl_rig_attrs[ctrl_bone.name][at] = getattr(ctrl_bone, at).copy()
-            else:
-                self.ctrl_rig_attrs[ctrl_bone.name][at] = getattr(ctrl_bone, at)
-
-
 def switch_to_mode(obj, mode, context=None):
     """Switches obj to mode given by 'mode'.
 
