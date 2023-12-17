@@ -1,6 +1,7 @@
-# USER NOTES:
-#   1) Will only bake actions that are selected for the cntrl rig
-#   1) The baked actions will be named as (prefix + strip name in of first strip in nla track)
+
+import bpy
+import math
+import blender_auto_common
 
 
 bl_info = {
@@ -15,39 +16,37 @@ bl_info = {
 }
 
 
-import bpy
-import math
-import blender_auto_common
-
-
-
 class BatchBakeAnimsToRig(bpy.types.Operator):
     """Bakes all SELECTED animations in NLA Tracks of another Rig this rig's NLA Tracks to this rig.
-    Note baked animations are named: [prefix][name of first strip in NLA track]"""
+
+    USER NOTES:
+        1) Will only bake actions that are selected for the cntrl rig
+        2) The baked actions will be named as (prefix + strip name in of first strip in nla track)
+        3) The rig to bake actions to needs to be the one in pose mode when this operator is run
+        4) This operator can be found in Pose Mode under Pose sub menu"""
 
     bl_idname = "anim.batch_bake_anims_to_rig"  # How to ref class from blender python
     bl_label = "Batch Animation Bake to Rig"  # Name in operator menu
     bl_options = {'REGISTER', 'UNDO'}  # Registers and enables undo
 
     #  Below properties control how the operator performs
-    ctrl_rig_name: bpy.props.StringProperty(
-        name="Anim. Rig Name", default="ctrl_rig", description="Rig that has animation data" +
-                                                               " in NLA track to bake to this rig")
-    prefix: bpy.props.StringProperty(
-        name="Baked Anim Prefix", default="A_", description="Prefix to add to baked animation name")
+    ctrl_rig_name: bpy.props.StringProperty(name="Anim. Rig Name", default="ctrl_rig",
+        description="Rig that has animation data in NLA track to bake to this rig")
 
-    overwrite: bpy.props.BoolProperty(
-        name="Overwrite", default=False, description="Whether to overwrite any actions that have" +
-                                                     "the same name that the baked action will have")
+    prefix: bpy.props.StringProperty(name="Baked Anim Prefix", default="A_",
+        description="Prefix to add to baked animation name")
 
-    clean_curves: bpy.props.BoolProperty(
-        name="Clean Curves", default=True, description="See blender documentation for curve cleaning")
+    overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,
+        description="Whether to overwrite any actions that have the same name that the baked action will have")
 
-    remove_root_motion: bpy.props.BoolProperty(
-        name="Remove Root Motion", default=False, description="Removes all but first key frame for root bone")
+    clean_curves: bpy.props.BoolProperty(name="Clean Curves", default=True,
+        description="See blender documentation for curve cleaning")
 
-    send_to_ue: bpy.props.BoolProperty(
-        name="Send To Unreal", default=True, description="Automatically sends all active NLA strips to UE")
+    remove_root_motion: bpy.props.BoolProperty(name="Remove Root Motion", default=False,
+        description="Removes all but first key frame for root bone")
+
+    send_to_ue: bpy.props.BoolProperty(name="Send To Unreal", default=True,
+        description="Automatically sends all active NLA strips to UE")
 
     @staticmethod
     def delete_action_from_nla(action, obj):
@@ -64,11 +63,15 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
         #     the nla tracks themselves since not sure if memory those refs point to
         #     becomes invalid after deleting some elems from nla_tracks collection)
         for i in trs_to_delete[::-1]:  # Going through list backwards to pop last elem first
-            obj.animation_data.nla_tracks.remove(obj.animation_data.nla_tracks[i])
+            tr = obj.animation_data.nla_tracks[i]
+            print("    Overwrite: deleting NLA track: " + tr.name + " for action: " + action.name)
+            obj.animation_data.nla_tracks.remove(tr)
 
     @staticmethod
     def toggle_game_rig_constraints(game_rig_obj, enable):
         """ Toggle game rig loc/rot constraints to ctrl rig on or off depending on enable"""
+        toggle = "ON" if enable else "OFF"
+        print("    Toggling game rig constraints " + toggle)
         for bone in game_rig_obj.pose.bones:
             for cnst in bone.constraints:
                 if cnst.type == 'COPY_LOCATION' or cnst.type == 'COPY_ROTATION':
@@ -84,12 +87,14 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             print("Skipping: " + ctrl_track.name + ", does not have any action strips")
             return None
         baked_action_name = self.prefix + ctrl_track.strips[0].name
+        print("Baking action to game_rig: " + baked_action_name)
         if context.blend_data.actions.find(baked_action_name) > -1:  # if action already exists with name
             if self.overwrite:  # delete action and any nla tracks containing it
                 self.delete_action_from_nla(context.blend_data.actions[baked_action_name], game_rig_obj)
                 context.blend_data.actions.remove(context.blend_data.actions[baked_action_name])
             else:
-                print("Skipping: " + ctrl_track.strips[0].name + " action already exists, overwrite not enabled")
+                print("    Overwrite: skipping: " + ctrl_track.strips[0].name + " action already exists, " +
+                      "overwrite not enabled")
                 return None
         # Get frame extent of track by getting min and max start and end frame of the track's strips
         start = math.inf
@@ -100,26 +105,26 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             if strip.frame_end > end:
                 end = strip.frame_end
         ctrl_track.is_solo = True  # Isolate animation from track to bake into action
+        game_rig_obj.select_set(True)  # due to a bug in blender need to make sure bake to rig is selected prior to bake
         bpy.ops.nla.bake(frame_start=int(start), frame_end=int(end), only_selected=True,
                          visual_keying=True, clear_constraints=False, clear_parents=False,
                          use_current_action=True, clean_curves=self.clean_curves)
         baked_action = game_rig_obj.animation_data.action
         if baked_action is None:
-            print("Skipping: " + ctrl_track.strips[0].name + " Baking action not successful")
-        print("Baked action: " + baked_action_name)
+            print("    Skipping: " + ctrl_track.strips[0].name + " Baking action not successful")
         baked_action.name = baked_action_name
         baked_action.use_fake_user = True
         return baked_action
 
     @staticmethod
-    def remove_root_movement(self, baked_action):
-            for fcu in baked_action.fcurves:
-                if 'pose.bones["root"].' in fcu.data_path:
-                    num_kf = len(fcu.keyframe_points)
-                    for i, kf in reversed(list(enumerate(fcu.keyframe_points))):
-                        if i == 0:
-                            continue
-                        fcu.keyframe_points.remove(kf)
+    def remove_root_movement(baked_action):
+        print("    Removing root motion for: " + baked_action.name)
+        for fcu in baked_action.fcurves:
+            if 'pose.bones["root"].' in fcu.data_path:
+                for i, kf in reversed(list(enumerate(fcu.keyframe_points))):
+                    if i == 0:
+                        continue
+                    fcu.keyframe_points.remove(kf)
 
     @staticmethod
     def mute_all_nla_tracks(rig_obj):
@@ -142,10 +147,10 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             else:
                 self.mute_all_nla_tracks(game_rig_obj)
 
+        # itterate over all NLA tracks in ctrl rig and bake animation from strips to game rig
+        print("Baking actions ...")
         self.toggle_game_rig_constraints(game_rig_obj, True)
         bpy.ops.pose.select_all(action='SELECT')  # Need to select all bones to Bake Anim
-
-        # itterate over all NLA tracks in ctrl rig and bake animation from strips to game rig
         for ctrl_track in ctrl_rig_obj.animation_data.nla_tracks:
             baked_action = self.bake_ctrl_rig_track_to_game_rig(ctrl_track, game_rig_obj, context)
             if baked_action is None:
@@ -155,8 +160,8 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             blender_auto_common.push_action_to_nla(game_rig_obj)
 
         if sending_to_unreal:
-            self.toggle_game_rig_constraints(game_rig_obj, False)
             print("Sending to Unreal ...")
+            self.toggle_game_rig_constraints(game_rig_obj, False)
             try:
                 bpy.ops.wm.send2ue()
             except AttributeError:
@@ -169,7 +174,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def menu_func(self, context):
+def menu_func(self, _):
     """Draws menu (passed to blender)"""
     self.layout.separator()
     self.layout.operator(BatchBakeAnimsToRig.bl_idname)

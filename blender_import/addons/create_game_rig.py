@@ -1,10 +1,8 @@
-# USER NOTES:
-#   1) Run operator defined below, by going to object mode, click Add Menu -> Armature ->
-#      Game Rig
-#   2) Tag ctrl rig non-deform bones in POSE MODE with custom property: "KEEP_GAME_RIG" to add
-#      them to the game rig, string value can be a prefix for bone.
-#   3) Fix game rig heirarchy (if desired, doesn't make a big difference to blender) afterwards
-#   4) Parent the game rig to character mesh afterwards
+
+import bpy
+import mathutils
+from collections import OrderedDict
+import blender_auto_common
 
 
 bl_info = {
@@ -17,26 +15,6 @@ bl_info = {
     "warning": "",
     "category": "Rigging",
 }
-
-
-import bpy
-import mathutils
-from collections import OrderedDict
-import blender_auto_common
-
-
-# HELPER FUNCTIONS AND CLASSES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-def traverse_bone_heirarchy(bn, operator, method):
-    """Recursively tranverse a bone heirarchy and perform operation on each bone.
-
-        Should pass in root bones as 'bn', function will recursively call itself on
-        all child bones. 'operator' is any object that has a method named 'method' to
-        call on every bone recursively"""
-    getattr(operator, method)(bn)
-    for ch in bn.children:
-        traverse_bone_heirarchy(ch, operator, method)
 
 
 class EditBoneCopier:
@@ -80,8 +58,14 @@ class EditBoneCopier:
 
 class CreateGameRig(bpy.types.Operator):
     """Creates a game ready rig from a Rigify rig.
-    NOTE: To keep certain non-deform bones, in POSE MODE tag them with the custom property:
-    KEEP_GAME_RIG"""
+
+    USER NOTES:
+      1) Run operator defined below, by going to object mode, click Add Menu -> Armature ->
+         Game Rig
+      2) Tag ctrl rig non-deform bones in POSE MODE with custom property: "KEEP_GAME_RIG" to add
+         them to the game rig, string value can be a prefix for bone.
+      3) Fix game rig heirarchy (if desired, doesn't make a big difference to blender) afterwards
+      4) Parent the game rig to character mesh afterwards"""
 
     bl_idname = "armature.create_game_rig"  # How to ref class from blender python
     bl_label = "Game Rig"  # Name in operator menu
@@ -89,9 +73,10 @@ class CreateGameRig(bpy.types.Operator):
 
     #  Below properties control how the operator performs
     ctrl_rig_name: bpy.props.StringProperty(name="Rigify Rig Name", default="ctrl_rig",
-                                            description="Rigify Rig to create Game Rig from")
+        description="Rigify Rig to create Game Rig from")
+
     game_rig_name: bpy.props.StringProperty(name="Game Rig Name", default="game_rig",
-                                            description="Name for the created Game Rig")
+        description="Name for the created Game Rig")
 
     def execute(self, context):
         """Take control rig and creates a game rig (called by Blender when operator invoked by user).
@@ -132,7 +117,7 @@ class CreateGameRig(bpy.types.Operator):
         bone_copier = EditBoneCopier()
         for bone in ctrl_rig_arm.edit_bones:  # Important to pass edit_bones
             if bone.parent is None:  # Check if root-level bone
-                traverse_bone_heirarchy(bone, bone_copier, 'copy_edit_bone_data')
+                blender_auto_common.traverse_bone_heirarchy(bone, bone_copier, 'copy_edit_bone_data')
 
         # Select game rig and make active, then switch to edit mode, then create bones from
         #     previously copied ctrl rig edit bone data
@@ -215,7 +200,7 @@ class CreateGameRig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def menu_func(self, context):
+def menu_func(self, _):
     """Draws menu (passed to blender)"""
     self.layout.operator(CreateGameRig.bl_idname)
 
