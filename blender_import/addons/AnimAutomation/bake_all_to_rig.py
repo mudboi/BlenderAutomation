@@ -27,7 +27,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,
         description="Whether to overwrite any actions that have the same name that the baked action will have")
 
-    clean_curves: bpy.props.BoolProperty(name="Clean Curves", default=True,
+    clean_curves: bpy.props.BoolProperty(name="Clean Curves", default=False,
         description="See blender documentation for curve cleaning")
 
     remove_root_motion: bpy.props.BoolProperty(name="Remove Root Motion", default=False,

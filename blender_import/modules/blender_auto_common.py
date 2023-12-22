@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 
 game_to_ctrl_constraint_pref = "CtrlRigConst_"
-anim_retgt_copy_rig_constraint_pref = "CtrlRigCopyConst_"
+anim_retgt_intermediate_rig_constraint_pref = "CtrlRigIntermedConst_"
 
 
 class RigifyLimbIKBakeSettings:
@@ -40,6 +40,8 @@ def switch_to_mode(obj, mode, context=None):
 
     NOTE: Will deselect any currently selected and/or activated objects and leave
     object selected and activated"""
+    bpy.ops.object.mode_set(mode='OBJECT')  # first switch to obj mode
+    bpy.ops.object.select_all(action='DESELECT')  # so we can deselect all
     obj.select_set(True)  # Need to select AND activate obj to switch modes
     if context:
         context.view_layer.objects.active = obj
