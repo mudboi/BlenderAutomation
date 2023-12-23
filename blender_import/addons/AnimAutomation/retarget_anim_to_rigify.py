@@ -257,6 +257,29 @@ class RetargetAnimsToRigify(bpy.types.Operator):
                                                    blender_auto_common.anim_retgt_intermediate_rig_constraint_pref,
                                                    retgt_props.retarget_bones)
 
+    @staticmethod
+    def clean_up_joint_tgt(context, dest_rig_obj, limb_ik, frame_start, frame_end):
+        print("            Cleaning Joint Tgt")
+        fk_bones = limb_ik.parse_string_list(limb_ik.fk_bones)
+        upper_fk = fk_bones[0]
+        lower_fk = fk_bones[1]
+        joint_tgt = limb_ik.parse_string_list(limb_ik.ctrl_bones)[1]
+        for fr in range(frame_start, frame_end + 1):
+            context.scene.frame_set(fr)
+            context.view_layer.update()
+            v1 = dest_rig_obj.pose.bones[upper_fk].vector
+            v2 = dest_rig_obj.pose.bones[lower_fk].vector
+            v1_v2 = v1 + v2
+            v1_v2.normalize()
+            n = v1.cross(v2)
+            n.normalize()
+            b = v1_v2.cross(n)
+            joint_tgt_loc_as = dest_rig_obj.pose.bones[upper_fk].tail + b * 0.75
+            blender_auto_common.set_bone_pose_armature_space(dest_rig_obj, joint_tgt,
+                 mathutils.Matrix.LocRotScale(joint_tgt_loc_as, None, None))
+            context.view_layer.update()
+            dest_rig_obj.pose.bones[joint_tgt].keyframe_insert('location')
+
     def execute(self, context):
         print("Retargeting actions ...")
         context.scene.tool_settings.use_keyframe_insert_auto = False
@@ -272,6 +295,8 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         dest_rig_id = dest_rig_obj.data['rig_id']
 
         for source_track in source_arm_obj.animation_data.nla_tracks:
+            if not source_track.select:
+                continue
             if not source_track:
                 continue
             if len(source_track.strips) < 1:
@@ -315,6 +340,7 @@ class RetargetAnimsToRigify(bpy.types.Operator):
                                  ctrl_bones=limb_settings.ctrl_bones,
                                  tail_bones=limb_settings.tail_bones,
                                  extra_ctrls=limb_settings.extra_ctrls)
+                    self.clean_up_joint_tgt(context, dest_rig_obj, limb_settings, int(frame_start), int(frame_end))
                     print("        Limb Bake Complete")
             blender_auto_common.push_action_to_nla(dest_rig_obj)
             dest_rig_obj.animation_data.nla_tracks[-1].mute = True

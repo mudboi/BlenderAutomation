@@ -126,3 +126,20 @@ def traverse_bone_heirarchy(bn, operator, method):
     getattr(operator, method)(bn)
     for ch in bn.children:
         traverse_bone_heirarchy(ch, operator, method)
+
+def set_bone_pose_armature_space(armature_obj, bone_name, bone_pose_as):
+    """set bone_name bone pose in armature_obj to armature space pose matrix specified in bone_pose_as"""
+    b = armature_obj.data.bones[bone_name]
+    pb = armature_obj.pose.bones[bone_name]
+    bone_rest_as = b.matrix_local
+    if b.parent is not None:
+        parent_pose_as = pb.parent.matrix
+        parent_rest_as = b.parent.matrix_local
+        bone_pose_ls = b.convert_local_to_pose(bone_pose_as, bone_rest_as, parent_matrix=parent_pose_as,
+                                               parent_matrix_local=parent_rest_as, invert=True)
+    else:
+        bone_pose_ls = b.convert_local_to_pose(bone_pose_as, bone_rest_as, invert=True)
+    pb.location = bone_pose_ls.to_translation()
+    pb.rotation_quaternion = bone_pose_ls.to_quaternion()
+    pb.scale = bone_pose_ls.to_scale()
+
