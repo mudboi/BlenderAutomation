@@ -21,7 +21,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
     ctrl_rig_name: bpy.props.StringProperty(name="Anim. Rig Name", default="ctrl_rig",
         description="Rig that has animation data in NLA track to bake to this rig")
 
-    prefix: bpy.props.StringProperty(name="Baked Anim Prefix", default="A_",
+    prefix: bpy.props.StringProperty(name="Baked Anim Prefix", default="A",
         description="Prefix to add to baked animation name")
 
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,

@@ -41,9 +41,10 @@ class CreateAnimRetargetingIntermediateRig(bpy.types.Operator):
     control rig bones to the bones in the intermediate rig. NOTE: BONES WILL NOT BE PARENTED.
 
     USER NOTES:
-        1) Need to be in Control Rig Pose Mode, with bones to copy over selected
+        1) The blend file should have a text blend data object called "retarget_anim_props.py". See description for
+            RetargetAnimsToRigify
         2) If rig already exists with same name as intermediate, will be overwritten
-        3) User still needs to go in and parent all the created bones properly"""
+        3) User still needs to go in and make parent all the created bones properly"""
 
     bl_idname = "armature.create_retgt_intermediate_rig"  # How to ref class from blender python
     bl_label = "Anim Retargeting Intermediate Rig"  # Name in operator menu
@@ -54,6 +55,9 @@ class CreateAnimRetargetingIntermediateRig(bpy.types.Operator):
 
     intermediate_rig_suff: bpy.props.StringProperty(name="Intermediate Rig Name Suff", default="_fk_intermediate",
         description="Suffix to append to control rig name for naming the intermediate rig")
+
+    constrain_to_ctrl_rig: bpy.props.BoolProperty(name="Constrain To Ctrl Rig", default=True,
+        description="Constrain the intermediate rig bones to their corresponding bones in the ctrl rig")
 
     @classmethod
     def poll(cls, context):
@@ -82,8 +86,6 @@ class CreateAnimRetargetingIntermediateRig(bpy.types.Operator):
             intermediate_rig_obj.data.edit_bones.new(rb)
             # need to use armature space transforms below since intermediate rig bones will not be parented, not _local
             #   suffixes below for ctrl_rig_bones means armature space not local space (very confusing)
-            intermediate_rig_obj.data.edit_bones[rb].use_local_location = False
-            intermediate_rig_obj.data.edit_bones[rb].use_inherit_rotation = False
             # using matrix as it's important to set bone roll
             intermediate_rig_obj.data.edit_bones[rb].matrix = ctrl_rig_obj.data.bones[rb].matrix_local
             intermediate_rig_obj.data.edit_bones[rb].length = ctrl_rig_obj.data.bones[rb].length
@@ -207,6 +209,7 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         bpy.ops.pose.select_all()
         context.object.pose.apply_pose_from_action(context.blend_data.actions["__rest_" + retgt_dest_rig.name])
         blender_auto_common.switch_to_mode(source_arm_obj, 'OBJECT')
+        context.view_layer.update()
 
     @staticmethod
     def select_all_retarget_bones(retarget_bones, dest_rig):
@@ -249,12 +252,14 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         dest_rig_obj.select_set(True)  # due to a bug in blender need to make sure bake to rig is selected prior to bake
         bpy.ops.nla.bake(frame_start=frame_start, frame_end=frame_end, visual_keying=True,
                          use_current_action=True, clean_curves=self.clean_curves, only_selected=True)
+        context.view_layer.update()
         blender_auto_common.toggle_rig_constraints(False, dest_rig_obj,
                                                    blender_auto_common.anim_retgt_intermediate_rig_constraint_pref,
                                                    retgt_props.retarget_bones)
 
     def execute(self, context):
         print("Retargeting actions ...")
+        context.scene.tool_settings.use_keyframe_insert_auto = False
         self.user_input_checks(context)
         dest_rig_obj, dest_intermediate_rig_obj = self.get_dest_and_intermediate_rig(context)
         source_arm_obj = context.scene.objects[self.source_arm]
@@ -263,6 +268,7 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         if dest_intermediate_rig_obj:
             check_retarget_props(retgt_props, dest_intermediate_rig_obj, check_limb_bake_settings=False)
         self.set_rigify_limb_ik_fk(retgt_props.limb_ik_bake_settings, dest_rig_obj, 1.)
+        context.view_layer.update()
         dest_rig_id = dest_rig_obj.data['rig_id']
 
         for source_track in source_arm_obj.animation_data.nla_tracks:
@@ -290,6 +296,7 @@ class RetargetAnimsToRigify(bpy.types.Operator):
                                            dest_intermediate_rig_obj if dest_intermediate_rig_obj else dest_rig_obj)
             print("....Calling Rokoku retargeting plug in...........................................................")
             bpy.ops.rsl.retarget_animation()
+            context.view_layer.update()
             print("....Rokoku retarging plug in operation complete..................................................")
             blender_auto_common.switch_to_mode(dest_rig_obj, "POSE")  # MODE SWITCH: SRC_ARMATURE POSE ~~~~~~~~~~~~~~~~
             if dest_intermediate_rig_obj:
