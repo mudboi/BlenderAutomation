@@ -2,6 +2,12 @@ import bpy
 import math
 import mathutils
 import warnings
+import sys
+import os
+
+module_dir = os.path.join(os.path.dirname(__file__), '..', 'modules')
+sys.path.append(module_dir)
+
 import blender_auto_common
 
 
@@ -83,18 +89,20 @@ def create_idle_poses_from_anim(anim_name, pose_frame, app_name, prefix=True, le
             blender_auto_common.push_action_to_nla(rig_obj)
 
 
-def calc_foot_speed(act=None, feet_name='foot_ik'):
+def calc_foot_speed(act=None, feet_names=('foot_ik.L', 'foot_ik.R'), marker_prefs=('LF', 'RF')):
     """Calculates travel and speed in X and Y direction of feet IK when on the ground.
 
     FPS, as taken from render settings, will be used to determine speed.The frames where
-    each foot is on the ground must denoted by using Extreme Keframe Type (must axactly 2
-    of such keyframes in feet channel)
+    each foot is on the ground must denoted by using pose markers (not timeline markers!), where the marker name
+    should be [marker_pref][_Down/_Up] at the frame where that foot is down/up
 
     :param act: action to calculate foot speeds from
-    :param feet_name: name of the feet bones, minus the '.L' or '.R'
+    :param feet_name: tuple of feet bone names to get displacement from
+    :param marker_prefs: tuple of marker prefixes corresponding to each foot in feet_names
     :return: Dictionary containing speeds, distances, and times of feet bones
     """
-
+    if len(feet_names) != len(marker_prefs):
+       raise Exception("feet_names and marker_prefs need to be the same size")
     fps = bpy.context.scene.render.fps
     rig_obj = blender_auto_common.find_object_in_mode('POSE')  # Get current pose mode rig0
     if act is None:
@@ -102,47 +110,91 @@ def calc_foot_speed(act=None, feet_name='foot_ik'):
     else:
         act = bpy.data.actions[act]
     out = {}
-    for ft in [feet_name + '.R', feet_name + '.L']:
+    for ft_n, ft in enumerate(feet_names):
         out[ft] = {'x_delta': None, 'y_delta': None, 't_delta': None, 'x_speed': None, 'y_speed': None, 'speed_mag': None}
         fc_x = act.fcurves.find('pose.bones["%s"].location' % ft, index=0)
         fc_y = act.fcurves.find('pose.bones["%s"].location' % ft, index=1)
-        t_vals = [None, None]
-        x_vals = [None, None]
-        y_vals = [None, None]
-        for kf in fc_x.keyframe_points:
-            if kf.type == 'EXTREME':
-                if t_vals[0] is None:
-                    val_ind = 0
-                elif t_vals[1] is None:
-                    val_ind = 1
-                else:
-                    warnings.warn("Found more than two 'EXTREME' Keyframes for loc x f-curve for: %s" % ft)
-                    continue
-                t_vals[val_ind] = kf.co.x
-                x_vals[val_ind] = kf.co.y
-                y_vals[val_ind] = fc_y.evaluate(kf.co.x)
-        if t_vals[0] is None or t_vals[1] is None:
-            warnings.warn("Found less than two 'EXTREME' Keyframes for loc x f-curve for: %s" % ft)
+        down_marker_ind = act.pose_markers.find(marker_prefs[ft_n]+"_Down")
+        up_marker_ind = act.pose_markers.find(marker_prefs[ft_n]+"_Up")
+        if down_marker_ind < 0 or up_marker_ind < 0:
+            warnings.warn("Could not find foot up down markers for: %s" % ft)
             continue
-        out[ft]['x_delta'] = x_vals[1] - x_vals[0]
-        out[ft]['y_delta'] = y_vals[1] - y_vals[0]
-        out[ft]['t_delta'] = (t_vals[1] - t_vals[0])*1/fps
+        down_frame = act.pose_markers[down_marker_ind].frame
+        up_frame = act.pose_markers[up_marker_ind].frame
+        x_kf_up = blender_auto_common.get_fcurve_keyframe_at_frame(up_frame, fc_x)[1]
+        x_kf_down = blender_auto_common.get_fcurve_keyframe_at_frame(down_frame, fc_x)[1]
+        y_kf_up = blender_auto_common.get_fcurve_keyframe_at_frame(up_frame, fc_y)[1]
+        y_kf_down = blender_auto_common.get_fcurve_keyframe_at_frame(down_frame, fc_y)[1]
+        if x_kf_up is None or x_kf_down is None or y_kf_up is None or y_kf_down is None:
+            raise Exception("No key frames on fcurves at the up/down marker locations")
+        out[ft]['x_delta'] = x_kf_up.co[1] - x_kf_down.co[1]
+        out[ft]['y_delta'] = y_kf_up.co[1] - y_kf_down.co[1]
+        out[ft]['t_delta'] = float(up_frame) - float(down_frame)
+        if down_frame > up_frame:
+            out[ft]['t_delta'] += act.frame_range[1] - act.frame_range[0]
+        out[ft]['t_delta'] *= 1./float(fps)
         out[ft]['x_speed'] = out[ft]['x_delta']/out[ft]['t_delta']
         out[ft]['y_speed'] = out[ft]['y_delta']/out[ft]['t_delta']
         out[ft]['speed_mag'] = math.sqrt(out[ft]['x_speed']**2 + out[ft]['y_speed']**2)
     return out
 
 
-def disp_all_action_foot_speed(feet_name='foot_ik'):
+def scale_foot_speed(tgt_speed, feet_names=('foot_ik.L', 'foot_ik.R'), marker_prefs=('LF', 'RF')):
+    def delete_key_foot_down_kfs(frame_range, fcv):
+        print("    Deleting keyframes on curve: " + fcv.data_path + "[" + str(fcv.array_index) + "] on " +
+              str(frame_range))
+        for fr in frame_range:
+            kf = blender_auto_common.get_fcurve_keyframe_at_frame(fr, fcv)[1]
+            if kf is not None:
+                fc.keyframe_points.remove(kf)
+    dir_specifier = {'F': 1, 'B': 1, 'L': 0, 'R': 0}
+    axis_specifier = ('x', 'y')
+    if len(feet_names) != len(marker_prefs):
+       raise Exception("feet_names and marker_prefs need to be the same size")
+    rig_obj = blender_auto_common.find_object_in_mode('POSE')  # Get current pose mode rig
+    print("Current foot speeds:")
+    disp_all_action_foot_speed(feet_names, marker_prefs)
+    for nla_track in rig_obj.animation_data.nla_tracks:
+        if len(nla_track.strips) == 0:
+            continue
+        act = nla_track.strips[0].action
+        if act is None:
+            continue
+        move_dir = dir_specifier[act.name[-1]]
+        print("Scaling foot speed for: " + act.name + " in direction: " + axis_specifier[move_dir])
+        feet_speed = calc_foot_speed(act.name, feet_names, marker_prefs)
+        for ft_n, ft in enumerate(feet_names):
+            down_frame = act.pose_markers[marker_prefs[ft_n] + "_Down"].frame
+            up_frame = act.pose_markers[marker_prefs[ft_n] + "_Up"].frame
+            fc = act.fcurves.find('pose.bones["%s"].location' % ft, index=move_dir)
+            if up_frame > down_frame:
+                delete_key_foot_down_kfs(range(up_frame - 1, down_frame, -1), fc)
+            else:
+                delete_key_foot_down_kfs(range(int(act.frame_range[1]) - 1, down_frame, -1), fc)
+                delete_key_foot_down_kfs(range(up_frame - 1, 0, -1), fc)
+            for kf in fc.keyframe_points:
+                kf.interpolation = "LINEAR"
+            tgt_disp = tgt_speed * feet_speed[ft]['t_delta']
+            disp_scale_factor = abs(tgt_disp / feet_speed[ft][axis_specifier[move_dir]+'_delta'])
+            print("Scaling foot: " + ft + " fcurve: " + fc.data_path + "[" + str(fc.array_index) + "] by " +
+                  str(disp_scale_factor))
+            blender_auto_common.scale_fcurve_from_midpoint(fc, disp_scale_factor)
+    print("New foot speeds:")
+    disp_all_action_foot_speed(feet_names, marker_prefs)
+
+
+def disp_all_action_foot_speed(feet_names=('foot_ik.L', 'foot_ik.R'), marker_prefs=('LF', 'RF')):
     rig_obj = blender_auto_common.find_object_in_mode('POSE')  # Get current pose mode rig0
     for nla_track in rig_obj.animation_data.nla_tracks:
         if len(nla_track.strips) > 0:
             act_name = nla_track.strips[0].action.name
-            foot_speed = calc_foot_speed(act_name, feet_name)
-            if (foot_speed[feet_name+".L"]['speed_mag'] is None or foot_speed[feet_name+".R"]['speed_mag'] is None):
-                continue
+            feet_speed = calc_foot_speed(act_name, feet_names, marker_prefs)
             print(act_name + ":")
-            print("    LF: %.4f  RF: %.4f" % (foot_speed[feet_name+".L"]['speed_mag'], foot_speed[feet_name+".R"]['speed_mag']) )
+            for ft_n,ft in enumerate(feet_names):
+                if feet_speed[ft]['speed_mag'] is None:
+                    continue
+                print("    " + marker_prefs[ft_n] + ": [ %.3f  %.3f ]  ->  %.3f" % (feet_speed[ft]['x_speed'],
+                    feet_speed[ft]['y_speed'], feet_speed[ft]['speed_mag']))
 
 
 def blend_feet_locations(act_prefix, move_angle, move_speed, foot_name='foot_ik',

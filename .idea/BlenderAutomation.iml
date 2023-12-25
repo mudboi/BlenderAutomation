@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/.bpy_autoocomplete" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/blender_import/addons" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/blender_import/modules" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/blender_import/startup" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <content url="file://$MODULE_DIR$/../bpy_autoocomplete" />

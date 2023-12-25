@@ -1,6 +1,7 @@
 import bpy
 import ast
 import mathutils
+import math
 from collections import OrderedDict
 
 
@@ -142,4 +143,21 @@ def set_bone_pose_armature_space(armature_obj, bone_name, bone_pose_as):
     pb.location = bone_pose_ls.to_translation()
     pb.rotation_quaternion = bone_pose_ls.to_quaternion()
     pb.scale = bone_pose_ls.to_scale()
+
+
+def get_fcurve_keyframe_at_frame(frame, fcurve):
+    for i, kf in enumerate(fcurve.keyframe_points):
+        if math.isclose(kf.co[0], float(frame)):
+            return i, kf
+    return -1, None
+
+def scale_fcurve_from_midpoint(fcurve, scale_factor):
+    curve_min = math.inf
+    curve_max = -math.inf
+    for kf in fcurve.keyframe_points:
+        if kf.co[1] > curve_max: curve_max = kf.co[1]
+        if kf.co[1] < curve_min: curve_min = kf.co[1]
+    curve_mid = (curve_max + curve_min) / 2.
+    for kf in fcurve.keyframe_points:
+        kf.co[1] += (kf.co[1] - curve_mid) * (scale_factor - 1.)
 
