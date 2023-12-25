@@ -286,6 +286,8 @@ class RetargetAnimsToRigify(bpy.types.Operator):
         self.user_input_checks(context)
         dest_rig_obj, dest_intermediate_rig_obj = self.get_dest_and_intermediate_rig(context)
         source_arm_obj = context.scene.objects[self.source_arm]
+        if source_arm_obj is dest_rig_obj or source_arm_obj is dest_intermediate_rig_obj:
+            raise Exception("Can't retarget to the same rig")
         retgt_props = get_retgt_props(context)
         check_retarget_props(retgt_props, dest_rig_obj)
         if dest_intermediate_rig_obj:

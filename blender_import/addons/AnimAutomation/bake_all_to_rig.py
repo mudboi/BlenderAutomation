@@ -111,11 +111,13 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
 
     def execute(self, context):
         """Bake all selected action in NLA track of ctrl_rig to the rig that is currently in pose mode"""
-
         if context.scene.objects.find(self.ctrl_rig_name) < 0:
             raise Exception("Could not find ctrl rig: " + self.ctrl_rig_name)
         ctrl_rig_obj = context.scene.objects[self.ctrl_rig_name]
         game_rig_obj = blender_auto_common.find_object_in_mode('POSE', context=context)
+
+        if ctrl_rig_obj is game_rig_obj:
+            raise Exception("Can't bake to and from the same rig")
 
         sending_to_unreal = self.send_to_ue
         if self.send_to_ue:
