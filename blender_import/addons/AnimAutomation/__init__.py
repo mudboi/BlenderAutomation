@@ -1,8 +1,8 @@
 import bpy
-from AnimAutomation import bake_all_to_rig, create_game_rig, retarget_anim_to_rigify, rig_helpers
+from AnimAutomation import bake_all_to_rig, create_game_rig, retarget_anim_to_rigify, anim_helpers
 
 
-modules = (bake_all_to_rig, create_game_rig, retarget_anim_to_rigify, rig_helpers)
+modules = (bake_all_to_rig, create_game_rig, retarget_anim_to_rigify, anim_helpers)
 
 
 bl_info = {

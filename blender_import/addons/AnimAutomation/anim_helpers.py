@@ -70,10 +70,32 @@ class ConstrainGameRig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-class VIEW3D_PT_RigHelperPanel(bpy.types.Panel):
-    """Displays Rig Helpers Operators in N-Panel Animation Tab in Pose mode"""
+class KeyBoneFromCurrent(bpy.types.Operator):
+    """Takes selected bone current viewport pose and keys it's location, rotation, and scale after all constraints,
+    drivers, etc, applied. After this is run, user should turn off those constraints, drivers, etc"""
 
-    bl_label = "Rig Helpers"
+    bl_idname = "anim.key_bone_pose_from_current"  # How to ref class from blender python
+    bl_label = "Key Bone Pose from Current"  # Name in operator menu
+    bl_options = {'REGISTER', 'UNDO'}  # Registers and enables undo
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "POSE"
+
+    def execute(self, context):
+        for b in context.selected_pose_bones:
+            bone_tm = b.bone.convert_local_to_pose(b.matrix, b.bone.matrix_local, invert=True)
+            b.location = bone_tm.translation
+            b.rotation_quaternion = bone_tm.to_quaternion()
+            bpy.ops.anim.keyframe_insert(type="LocRotScale")
+            print("Keyed Bone: " + str(b))
+        return {'FINISHED'}
+
+
+class VIEW3D_PT_AnimHelperPanel(bpy.types.Panel):
+    """Displays Anim Helpers Operators in N-Panel Animation Tab in Pose mode"""
+
+    bl_label = "Anim Helpers"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Animation"
@@ -88,18 +110,21 @@ class VIEW3D_PT_RigHelperPanel(bpy.types.Panel):
         layout = self.layout
         sub = layout.column(align=True)
         layout.operator(ConstrainGameRig.bl_idname, text=ConstrainGameRig.bl_label)
+        layout.operator(KeyBoneFromCurrent.bl_idname, text=KeyBoneFromCurrent.bl_label)
 
 
 def register():
     """Registers this add-on to blender if user selected (called by blender)"""
     bpy.utils.register_class(ConstrainGameRig)
-    bpy.utils.register_class(VIEW3D_PT_RigHelperPanel)
+    bpy.utils.register_class(KeyBoneFromCurrent)
+    bpy.utils.register_class(VIEW3D_PT_AnimHelperPanel)
 
 
 def unregister():
     """Unregisters this add-on is user de-selected"""
-    bpy.utils.unregister_class(VIEW3D_PT_RigHelperPanel)
+    bpy.utils.unregister_class(VIEW3D_PT_AnimHelperPanel)
     bpy.utils.unregister_class(ConstrainGameRig)
+    bpy.utils.unregister_class(KeyBoneFromCurrent)
 
 
 if __name__ == '__main__':
