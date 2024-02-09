@@ -136,7 +136,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
             if baked_action is None:
                 continue
             if self.remove_root_motion:
-                self.remove_root_motion(baked_action)
+                self.remove_root_movement(baked_action)
             blender_auto_common.push_action_to_nla(game_rig_obj)
 
         if sending_to_unreal:
