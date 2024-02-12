@@ -42,15 +42,23 @@ class EditBoneCopier:
 
 
 class CreateGameRig(bpy.types.Operator):
-    """Creates a game ready rig from a Rigify rig.
+    """Creates a game ready rig from a Rigify rig using rigify ctrl rig DEF bones and any bones user tags
+    with custom bone property KEEP_GAME_RIG with game rig name as the prop value.
 
     USER NOTES:
-      1) Run operator defined below, by going to object mode, click Add Menu -> Armature ->
+      1) Game Rig should not have the same exact bone names as ctrl_rig, since if in blender you apply an
+         action meant for the game rig onto the ctrl rig, the ctrl rig will get messed up, since ctrl rig
+         has same named bones (DEF-) bones that are not meant to be keyframed. This operator will make sure
+         no bone names match with ctrl rig by either:
+            a) using KEEP_GAME_RIG bone prop value (can't match ctrl rig bone name)
+            b) removing "DEF-" prefix
+      2) If KEEP_GAME_RIG used on a bone, the game rig bone will have an identical KEEP_GAME_RIG bone property
+         that has the ctrl rig bone name, this way the ctrl rig bone prop and game rig bone prop has maps to
+         their respective bone in the other rig
+      3) Run operator defined below, by going to object mode, click Add Menu -> Armature ->
          Game Rig
-      2) Tag ctrl rig non-deform bones in POSE MODE with custom property: "KEEP_GAME_RIG" to add
-         them to the game rig, string value can be a prefix for bone.
-      3) Fix game rig heirarchy (if desired, doesn't make a big difference to blender) afterwards
-      4) Parent the game rig to character mesh afterwards"""
+      4) Fix game rig heirarchy (if desired, doesn't make a big difference to blender) afterwards
+      5) Parent the game rig to character mesh afterwards"""
 
     bl_idname = "armature.create_game_rig"  # How to ref class from blender python
     bl_label = "Game Rig"  # Name in operator menu
@@ -62,6 +70,59 @@ class CreateGameRig(bpy.types.Operator):
 
     game_rig_name: bpy.props.StringProperty(name="Game Rig Name", default="game_rig",
         description="Name for the created Game Rig")
+
+    @staticmethod
+    def ctrl_to_game_rig_bone_name(ctrl_rig_bname, keep_gr_prop):
+        if keep_gr_prop:
+            return keep_gr_prop
+        if "DEF-" in ctrl_rig_bname:
+            return "def-" + ctrl_rig_bname.split("DEF-", 1)[1]
+        return None
+
+    @staticmethod
+    def game_to_ctrl_rig_bone_name(game_rig_bname, keep_gr_prop):
+        if keep_gr_prop:
+            return keep_gr_prop
+        if "def-" in game_rig_bname:
+            return "DEF-" + game_rig_bname.split("def-", 1)[1]
+        return None
+
+    @staticmethod
+    def constrain_game_rig(game_rig_obj, ctrl_rig_obj):
+        print(" Applying Game Rig Constraints ....")
+        for bone in game_rig_obj.pose.bones:  # Pose Bones NOT Edit Bones
+            print("Constraining: " + bone.name)
+            keep_game_rig = bone.get("KEEP_GAME_RIG")  # note some bones have a pref attached
+            cr_name = CreateGameRig.game_to_ctrl_rig_bone_name(bone.name, keep_game_rig)
+            loc_const_name = blender_auto_common.game_to_ctrl_constraint_pref + "Loc"
+            rot_const_name = blender_auto_common.game_to_ctrl_constraint_pref + "Rot"
+            loc_constrained = False
+            rot_constrained = False
+            for con in bone.constraints:  # remove all current constraints
+                if not loc_constrained and con.name == loc_const_name:
+                    print("    Reenabling Constraint: " + con.name)
+                    con.enabled = True
+                    loc_constrained = True
+                elif not rot_constrained and con.name == rot_const_name:
+                    print("    Reenabling Constraint: " + con.name)
+                    con.enabled = True
+                    rot_constrained = True
+                else:
+                    print("    Removing Constraint: " + con.type + ": " + con.name)
+                    bone.constraints.remove(con)
+            if not loc_constrained:
+                print("    Adding Constraint: " + loc_const_name)
+                loc = bone.constraints.new(type="COPY_LOCATION")
+                loc.name = loc_const_name
+                loc.target = ctrl_rig_obj
+                loc.subtarget = cr_name
+            if not rot_constrained:
+                print("    Adding Constraint: " + rot_const_name)
+                rot = bone.constraints.new(type="COPY_ROTATION")
+                rot.name = rot_const_name
+                rot.target = ctrl_rig_obj
+                rot.subtarget = cr_name
+        print("Finished applying game rig constraints")
 
     def execute(self, context):
         """Take control rig and creates a game rig (called by Blender when operator invoked by user).
@@ -83,13 +144,13 @@ class CreateGameRig(bpy.types.Operator):
         else:
             game_rig_obj = context.scene.objects[self.game_rig_name]  # get ref if it does
             game_rig_arm = game_rig_obj.data
-        if context.blend_data.collections.find('Rig') < 0:  # Check if 'Rig' Collection does not exists
-            rig_col = context.blend_data.collections.new('Rig')  # Create and link to current scene if not
-            context.scene.collection.children.link(rig_col)
+        if context.blend_data.collections.find('Export') < 0:  # Check if 'Export' Collection does not exists
+            exp_col = context.blend_data.collections.new('Export')  # Create and link to current scene if not
+            context.scene.collection.children.link(exp_col)
         else:
-            rig_col = context.blend_data.collections['Rig']  # Grab ref if it does
-        if context.blend_data.collections['Rig'].objects.find(self.game_rig_name):  # Check if game rig in 'Rig'
-            rig_col.objects.link(game_rig_obj)  # Link to collection if not
+            exp_col = context.blend_data.collections['Export']  # Grab ref if it does
+        if context.blend_data.collections['Export'].objects.find(self.game_rig_name):  # Check if game rig in 'Rig'
+            exp_col.objects.link(game_rig_obj)  # Link to collection if not
 
         # Select ctrl rig and make active -> switch it to edit mode -> itterate through
         #     all root-level bones -> recursively itterate through children of those root-level bones
@@ -108,21 +169,36 @@ class CreateGameRig(bpy.types.Operator):
         #     previously copied ctrl rig edit bone data
         bpy.ops.object.mode_set(mode='OBJECT')  # MODE SWTICH~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         blender_auto_common.switch_to_mode(game_rig_obj, 'EDIT', context=context)  # MODE SWTICH~~~
+        cr_to_gr_names = {}
+        custom_name_gr_to_cr = {}
+        keep_bones = []
         for (cb_name, cb_attrs) in bone_copier.ctrl_rig_attrs.items():
             # Iter over all ctrl_rig edit bone attribute data copied
-            if game_rig_arm.edit_bones.find(cb_name) < 0:
+            keep_game_rig = ctrl_rig_obj.pose.bones[cb_name].get("KEEP_GAME_RIG")  # custom prop to keep bone in gr
+            gr_name = self.ctrl_to_game_rig_bone_name(cb_name, keep_game_rig)
+            if gr_name:
+                keep_bones.append(gr_name)
+                if ctrl_rig_obj.pose.bones.find(gr_name) != -1:
+                    raise Exception("Can't have identical game rig and ctrl rig bone name: " + gr_name)
+            else:
+                gr_name = cb_name
+            cr_to_gr_names[cb_name] = gr_name
+            if keep_game_rig:
+                custom_name_gr_to_cr[gr_name] = cb_name
+            if game_rig_arm.edit_bones.find(gr_name) < 0:
                 # Check if game_rig edit bone by the same name does not exist and create if not
-                game_bone = game_rig_arm.edit_bones.new(cb_name)
+                game_bone = game_rig_arm.edit_bones.new(gr_name)
             else:  # if already exists grab a ref
-                game_bone = game_rig_arm.edit_bones[cb_name]
+                game_bone = game_rig_arm.edit_bones[gr_name]
             # Even if game_rig edit bone already existed, ctrl_rig edit bone attribute data
             #     might have changed since script previously run, so overwriting all values
             game_bone.bbone_segments = 1
             for (attr, val) in cb_attrs.items():
                 if attr == 'parent' and val is not None:  # if edit bone needs to be parented
-                    # Need to find game_rig edit bone with name identical to ctrl_rig edit
+                    # Need to find game_rig edit bone with name corresponding to ctrl_rig edit
                     #     bone's parent and use the ref to that bone to parent this bone
-                    parent_bone_ind = game_rig_arm.edit_bones.find(val)
+                    gr_parent_name = cr_to_gr_names[val]
+                    parent_bone_ind = game_rig_arm.edit_bones.find(gr_parent_name)
                     game_bone.parent = game_rig_arm.edit_bones[parent_bone_ind]
                 else:
                     setattr(game_bone, attr, val)
@@ -130,54 +206,18 @@ class CreateGameRig(bpy.types.Operator):
         # In Edit Mode, select all bones that are not Rigify Deform bones (prefixed with "DEF-")
         #     or are DEF- bones that don't exist in the ctrl_rig anymore and delete them
         bpy.ops.armature.select_all(action='DESELECT')
-        keep_in_game_rig = {}  # [ctrl_rig_name]: game_rig_pref
         for bone in game_rig_arm.edit_bones:
-            if ctrl_rig_arm.bones.find(bone.name) < 0:
-                # Checks if ctrl_rig has a corresponding bone (with same name), if not it means
-                #     the bone was deleted from the ctrl_rig since script previously ran and
-                #     need to delete it from game rig as well
+            if bone.name not in keep_bones:
                 bone.select = True
-            elif bone.name[:4] != "DEF-":
-                # custom props can either be None (doesn't exist), empty string/num, or string/num
-                keep = ctrl_rig_obj.pose.bones[bone.name].get("KEEP_GAME_RIG")
-                if keep is None:
-                    bone.select = True
-                else:
-                    keep_in_game_rig[bone.name] = keep
-                    if keep:
-                        bone.name = keep + bone.name
         bpy.ops.armature.delete()
         # Need to exit out of edit mode to save edit bones
         bpy.ops.object.mode_set(mode='OBJECT')  # MODE SWITCH ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # Add "KEEP_GAME_RIG custom prop to game_rig bones
-        for bone_name, pref in keep_in_game_rig.items():
-            game_rig_obj.pose.bones[pref + bone_name]["KEEP_GAME_RIG"] = pref
+        for gr_name, cr_name in custom_name_gr_to_cr.items():
+            game_rig_obj.pose.bones[gr_name]["KEEP_GAME_RIG"] = cr_name
 
-        # Finally constrain  all bones, if not already constrained to the ctrl_rig for animating
-        for bone in game_rig_obj.pose.bones:  # Pose Bones NOT Edit Bones
-            loc_constrained = False
-            rot_constrained = False
-            game_rig_pref = bone.get("KEEP_GAME_RIG")
-            for con in bone.constraints:  # iter over all Pose Bones to check const exists
-                if con.type == "COPY_LOCATION" and con.subtarget == bone.name:
-                    loc_constrained = True
-                elif con.type == "COPY_ROTATION" and con.subtarget == bone.name:
-                    rot_constrained = True
-            if not loc_constrained:
-                loc = bone.constraints.new(type="COPY_LOCATION")
-                loc.target = ctrl_rig_obj
-                if game_rig_pref is not None:
-                    loc.subtarget = bone.name[len(game_rig_pref):]
-                else:
-                    loc.subtarget = bone.name
-            if not rot_constrained:
-                rot = bone.constraints.new(type="COPY_ROTATION")
-                rot.target = ctrl_rig_obj
-                if game_rig_pref is not None:
-                    rot.subtarget = bone.name[len(game_rig_pref):]
-                else:
-                    rot.subtarget = bone.name
+        self.constrain_game_rig(game_rig_obj, ctrl_rig_obj)
         return {'FINISHED'}
 
     def invoke(self, context, event):

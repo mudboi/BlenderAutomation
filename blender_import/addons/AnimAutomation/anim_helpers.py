@@ -1,5 +1,6 @@
 
 import bpy
+from AnimAutomation import create_game_rig
 import blender_auto_common
 
 
@@ -24,45 +25,7 @@ class ConstrainGameRig(bpy.types.Operator):
     def execute(self, context):
         game_rig_obj = blender_auto_common.find_object_in_mode("POSE", context=context)
         ctrl_rig_obj = bpy.data.objects[self.ctrl_rig_name]
-        print(" Applying Game Rig Constraints ....")
-        for bone in game_rig_obj.pose.bones:  # Pose Bones NOT Edit Bones
-            print("Constraining: " + bone.name)
-            game_rig_pref = bone.get("KEEP_GAME_RIG")  # note some bones have a pref attached
-            loc_const_name = blender_auto_common.game_to_ctrl_constraint_pref + "Loc"
-            rot_const_name = blender_auto_common.game_to_ctrl_constraint_pref + "Rot"
-            loc_constrained = False
-            rot_constrained = False
-            for con in bone.constraints:  # remove all current constraints
-                if not loc_constrained and con.name == loc_const_name:
-                    print("    Reenabling Constraint: " + con.name)
-                    con.enabled = True
-                    loc_constrained = True
-                elif not rot_constrained and con.name == rot_const_name:
-                    print("    Reenabling Constraint: " + con.name)
-                    con.enabled = True
-                    rot_constrained = True
-                else:
-                    print("    Removing Constraint: " + con.type + ": " + con.name)
-                    bone.constraints.remove(con)
-            if not loc_constrained:
-                print("    Adding Constraint: " + loc_const_name)
-                loc = bone.constraints.new(type="COPY_LOCATION")
-                loc.name = loc_const_name
-                loc.target = ctrl_rig_obj
-                if game_rig_pref is not None:
-                    loc.subtarget = bone.name[len(game_rig_pref):]
-                else:
-                    loc.subtarget = bone.name
-            if not rot_constrained:
-                print("    Adding Constraint: " + rot_const_name)
-                rot = bone.constraints.new(type="COPY_ROTATION")
-                rot.name = rot_const_name
-                rot.target = ctrl_rig_obj
-                if game_rig_pref is not None:
-                    rot.subtarget = bone.name[len(game_rig_pref):]
-                else:
-                    rot.subtarget = bone.name
-        print("Finished applying game rig constraints")
+        create_game_rig.CreateGameRig.constrain_game_rig(game_rig_obj, ctrl_rig_obj)
         return {'FINISHED'}
 
     def invoke(self, context, event):
