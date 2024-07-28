@@ -130,7 +130,7 @@ class CalcFootSpeed(bpy.types.Operator):
             out[ft]['y_delta'] = y_kf_up.co[1] - y_kf_down.co[1]
             out[ft]['t_delta'] = float(up_frame) - float(down_frame)
             if down_frame > up_frame:
-                out[ft]['t_delta'] += act.frame_range[1] - act.frame_range[0] + 1. # plus b/c last frame needs to wrap to first
+                out[ft]['t_delta'] += act.frame_range[1] - act.frame_range[0]  # plus b/c last frame needs to wrap to first
             out[ft]['t_delta'] *= 1. / float(fps)
             out[ft]['x_speed'] = out[ft]['x_delta'] / out[ft]['t_delta']
             out[ft]['y_speed'] = out[ft]['y_delta'] / out[ft]['t_delta']
