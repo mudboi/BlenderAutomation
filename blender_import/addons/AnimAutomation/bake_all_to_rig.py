@@ -36,24 +36,48 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
     send_to_ue: bpy.props.BoolProperty(name="Send To Unreal", default=True,
         description="Automatically sends all active NLA strips to UE")
 
-    @staticmethod
-    def delete_action_from_nla(action, obj):
-        """Deletes any nla track (not just the strip) that has a strip with 'action'.
+    def execute(self, context):
+        """Bake all selected action in NLA track of ctrl_rig to the rig that is currently in pose mode"""
+        if context.scene.objects.find(self.ctrl_rig_name) < 0:
+            raise Exception("Could not find ctrl rig: " + self.ctrl_rig_name)
+        ctrl_rig_obj = context.scene.objects[self.ctrl_rig_name]
+        game_rig_obj = blender_auto_common.find_object_in_mode('POSE', context=context)
 
-        'action' is the bpy action object to search and delete nla track for.
-        'obj' is the object that has the nla track to search"""
-        trs_to_delete = []  # Indices of nla tracks that have action
-        for i, tr in enumerate(obj.animation_data.nla_tracks):  # iter thru tracks and strips
-            for st in tr.strips:
-                if st.action is action:
-                    trs_to_delete.append(i)
-        # Just to be safe, deleting nla tracks via their indices (not holding to refs of
-        #     the nla tracks themselves since not sure if memory those refs point to
-        #     becomes invalid after deleting some elems from nla_tracks collection)
-        for i in trs_to_delete[::-1]:  # Going through list backwards to pop last elem first
-            tr = obj.animation_data.nla_tracks[i]
-            print("    Overwrite: deleting NLA track: " + tr.name + " for action: " + action.name)
-            obj.animation_data.nla_tracks.remove(tr)
+        if ctrl_rig_obj is game_rig_obj:
+            raise Exception("Can't bake to and from the same rig")
+
+        sending_to_unreal = self.send_to_ue
+        if self.send_to_ue:
+            if game_rig_obj.data is not blender_auto_common.get_export_armature():
+                print("Armature recieving baked actions is not the same as Send2UE Export Armature, not sending to UE")
+                sending_to_unreal = False
+            else:
+                blender_auto_common.mute_all_nla_tracks(game_rig_obj)
+
+        # itterate over all NLA tracks in ctrl rig and bake animation from strips to game rig
+        print("Baking actions ...")
+        blender_auto_common.toggle_rig_constraints(True, game_rig_obj, blender_auto_common.game_to_ctrl_constraint_pref)
+        bpy.ops.pose.select_all(action='SELECT')  # Need to select all bones to Bake Anim
+        for ctrl_track in ctrl_rig_obj.animation_data.nla_tracks:
+            baked_action = self.bake_ctrl_rig_track_to_game_rig(ctrl_track, game_rig_obj, context)
+            if baked_action is None:
+                continue
+            if self.remove_root_motion:
+                self.remove_root_movement(baked_action)
+            blender_auto_common.push_action_to_nla(game_rig_obj)
+
+        if sending_to_unreal:
+            print("Sending to Unreal ...")
+            blender_auto_common.toggle_rig_constraints(False, game_rig_obj,
+                                                       blender_auto_common.game_to_ctrl_constraint_pref)
+            try:
+                bpy.ops.wm.send2ue()
+            except AttributeError:
+                print("Can't send to unreal, could not find send2ue addon")
+            blender_auto_common.toggle_rig_constraints(True, game_rig_obj,
+                                                       blender_auto_common.game_to_ctrl_constraint_pref)
+        print("Finished Baking Actions")
+        return {'FINISHED'}
 
     def bake_ctrl_rig_track_to_game_rig(self, ctrl_track, game_rig_obj, context):
         """ Bake ctrl_track which should be an NLA track in ctrl rig to game_rig_obj NLA track.
@@ -68,7 +92,7 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
         print("Baking action to game_rig: " + baked_action_name)
         if context.blend_data.actions.find(baked_action_name) > -1:  # if action already exists with name
             if self.overwrite:  # delete action and any nla tracks containing it
-                self.delete_action_from_nla(context.blend_data.actions[baked_action_name], game_rig_obj)
+                blender_auto_common.delete_action_from_nla(context.blend_data.actions[baked_action_name], game_rig_obj)
                 context.blend_data.actions.remove(context.blend_data.actions[baked_action_name])
             else:
                 print("    Overwrite: skipping: " + ctrl_track.strips[0].name + " action already exists, " +
@@ -103,54 +127,6 @@ class BatchBakeAnimsToRig(bpy.types.Operator):
                     if i == 0:
                         continue
                     fcu.keyframe_points.remove(kf)
-
-    @staticmethod
-    def mute_all_nla_tracks(rig_obj):
-        for track in rig_obj.animation_data.nla_tracks:
-            track.mute = True
-
-    def execute(self, context):
-        """Bake all selected action in NLA track of ctrl_rig to the rig that is currently in pose mode"""
-        if context.scene.objects.find(self.ctrl_rig_name) < 0:
-            raise Exception("Could not find ctrl rig: " + self.ctrl_rig_name)
-        ctrl_rig_obj = context.scene.objects[self.ctrl_rig_name]
-        game_rig_obj = blender_auto_common.find_object_in_mode('POSE', context=context)
-
-        if ctrl_rig_obj is game_rig_obj:
-            raise Exception("Can't bake to and from the same rig")
-
-        sending_to_unreal = self.send_to_ue
-        if self.send_to_ue:
-            if game_rig_obj.data is not blender_auto_common.get_export_armature():
-                print("Armature recieving baked actions is not the same as Send2UE Export Armature, not sending to UE")
-                sending_to_unreal = False
-            else:
-                self.mute_all_nla_tracks(game_rig_obj)
-
-        # itterate over all NLA tracks in ctrl rig and bake animation from strips to game rig
-        print("Baking actions ...")
-        blender_auto_common.toggle_rig_constraints(True, game_rig_obj, blender_auto_common.game_to_ctrl_constraint_pref)
-        bpy.ops.pose.select_all(action='SELECT')  # Need to select all bones to Bake Anim
-        for ctrl_track in ctrl_rig_obj.animation_data.nla_tracks:
-            baked_action = self.bake_ctrl_rig_track_to_game_rig(ctrl_track, game_rig_obj, context)
-            if baked_action is None:
-                continue
-            if self.remove_root_motion:
-                self.remove_root_movement(baked_action)
-            blender_auto_common.push_action_to_nla(game_rig_obj)
-
-        if sending_to_unreal:
-            print("Sending to Unreal ...")
-            blender_auto_common.toggle_rig_constraints(False, game_rig_obj,
-                                                       blender_auto_common.game_to_ctrl_constraint_pref)
-            try:
-                bpy.ops.wm.send2ue()
-            except AttributeError:
-                print("Can't send to unreal, could not find send2ue addon")
-            blender_auto_common.toggle_rig_constraints(True, game_rig_obj,
-                                                       blender_auto_common.game_to_ctrl_constraint_pref)
-        print("Finished Baking Actions")
-        return {'FINISHED'}
 
     def invoke(self, context, event):
         """Display a pop-up menu to let user set props (called by blender)"""

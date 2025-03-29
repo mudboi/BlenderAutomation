@@ -50,6 +50,11 @@ def switch_to_mode(obj, mode, context=None):
         bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode=mode)
 
+def get_first_screen_area_of_type(type, context):
+    for area in context.screen.areas:
+        if area.type == type:
+            return area
+    return None
 
 def find_object_in_mode(mode, raise_if_missing=True, context=None):
     """Find an object that is currently in a mode given by 'mode'.
@@ -94,12 +99,38 @@ def move_obj_to_coll(context, obj, coll_name, raise_if_err=False):
     tgt_coll.objects.link(obj)
 
 
-def push_action_to_nla(rig_obj):
+def push_action_to_nla(rig_obj, name=None):
     """Push 'rig_obj's active action to NLA"""
     act = rig_obj.animation_data.action  # Get current action
     track = rig_obj.animation_data.nla_tracks.new()  # create new NLA track and push action to it
     track.strips.new(act.name, int(act.frame_range[0]), act)
+    if name:
+        track.name = name
     rig_obj.animation_data.action = None  # Unlink the action as active action
+
+
+def mute_all_nla_tracks(rig_obj):
+    for track in rig_obj.animation_data.nla_tracks:
+        track.mute = True
+
+
+def delete_action_from_nla(action, obj):
+    """Deletes any nla track (not just the strip) that has a strip with 'action'.
+
+    'action' is the bpy action object to search and delete nla track for.
+    'obj' is the object that has the nla track to search"""
+    trs_to_delete = []  # Indices of nla tracks that have action
+    for i, tr in enumerate(obj.animation_data.nla_tracks):  # iter thru tracks and strips
+        for st in tr.strips:
+            if st.action is action:
+                trs_to_delete.append(i)
+    # Just to be safe, deleting nla tracks via their indices (not holding to refs of
+    #     the nla tracks themselves since not sure if memory those refs point to
+    #     becomes invalid after deleting some elems from nla_tracks collection)
+    for i in trs_to_delete[::-1]:  # Going through list backwards to pop last elem first
+        tr = obj.animation_data.nla_tracks[i]
+        print("    Overwrite: deleting NLA track: " + tr.name + " for action: " + action.name)
+        obj.animation_data.nla_tracks.remove(tr)
 
 
 def toggle_rig_constraints(enable, constrain_rig, pref_identifier, bone_names=None):
