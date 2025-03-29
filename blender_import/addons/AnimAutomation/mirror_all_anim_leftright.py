@@ -12,6 +12,12 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
            " _LStanceIdle", the created flipped anim will flip the _L to _R and vice versa
         2) The mirrored action will be named as "-" + [L or R FLIPPED][... the rest of the name], so the mirrored
             anim from the above example will be "_RStanceIdle"
+        3) For animations that have character moving in a direction, e.g. _RStanceMoveL has character moving to th left,
+            when the animation is mirrored, the animation will now have character moving in the opposite direciton, e.g.
+            the flipped version of _RStanceMoveL should be _LStanceMoveR. As long as flip_anim_move_dir is True below, for
+            every anim that has 'L' or 'R' at the end of the name, it will be flipped to 'R' and 'L' respectively
+        4) Pose markers denoting foot down/up frames should be named LF_[Down/Up] or RF_[Down/Up], their naming will
+            have to be flipped as well when mirroring animation
         3) This operator can be found in Pose Mode under Pose sub menu.
         4) IMPORTANT: Make sure all bones are selectable"""
 
@@ -22,6 +28,10 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
     #  Below properties control how the operator performs
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,
         description="Whether to overwrite any actions that have the same name that the mirror action will have")
+
+    flip_anim_move_dir: bpy.props.BoolProperty(name="Flip Anim Move Dir", default=True,
+        description="If anim has 'L' or 'R' at the end of anim name, will flip the naming to 'R' and 'L', respecively" 
+        " as mirrored animation will be moving in the opposite direction")
 
     def execute(self, context):
         """Mirrors all selected action in NLA track of the rig that is currently in pose mode"""
@@ -74,18 +84,34 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
                 bpy.ops.action.select_all(action='SELECT')
                 bpy.ops.action.copy()
                 bpy.ops.action.paste(merge="OVER_ALL", flipped=True)
+            self.flip_pose_markers(flipped_action)
             flipped_action.use_fake_user = True
             blender_auto_common.push_action_to_nla(rig_obj, flipped_action.name)
         print("Finished Mirroring Actions")
         return {'FINISHED'}
 
-    @staticmethod
-    def get_flipped_action_name(act_name):
+    def get_flipped_action_name(self, act_name):
+        flip_name = ""
         if act_name[:2] == "_L":
-            return "_R" + act_name[2:]
+            flip_name = "_R" + act_name[2:]
         elif act_name[:2] == "_R":
-            return "_L" + act_name[2:]
-        return None
+            flip_name = "_L" + act_name[2:]
+        else:
+            return None
+        if self.flip_anim_move_dir:
+            if flip_name[-1] == 'L':
+                flip_name = flip_name[:-1] + 'R'
+            elif flip_name[-1] == 'R':
+                flip_name = flip_name[:-1] + 'L'
+        return flip_name
+
+    @staticmethod
+    def flip_pose_markers(flip_action):
+        for m in flip_action.pose_markers:
+            if m.name[:2] == "LF":
+                m.name = "RF" + m.name[2:]
+            elif m.name[:2] == "RF":
+                m.name = "LF" + m.name[2:]
 
     def invoke(self, context, event):
         """Display a pop-up menu to let user set props (called by blender)"""
