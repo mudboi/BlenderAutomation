@@ -1,6 +1,6 @@
 
 import bpy
-import math
+import time
 import blender_auto_common
 
 
@@ -13,8 +13,7 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
         2) The mirrored action will be named as "-" + [L or R FLIPPED][... the rest of the name], so the mirrored
             anim from the above example will be "_RStanceIdle"
         3) This operator can be found in Pose Mode under Pose sub menu.
-        4) IMPORTANT: The start keyframe needs to key ever important channel for the animation
-        5) IMPORTANT: Make sure all bones are selectable"""
+        4) IMPORTANT: Make sure all bones are selectable"""
 
     bl_idname = "anim.batch_mirror_anims_leftright"  # How to ref class from blender python
     bl_label = "Batch Mirror Anims Left Right"  # Name in operator menu
@@ -23,9 +22,6 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
     #  Below properties control how the operator performs
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,
         description="Whether to overwrite any actions that have the same name that the mirror action will have")
-
-    start_keyframe: bpy.props.IntProperty(name="Start KeyFrame", default=0,
-        description="Which keyframe animations start at")
 
     def execute(self, context):
         """Mirrors all selected action in NLA track of the rig that is currently in pose mode"""
@@ -60,39 +56,23 @@ class BatchMirrorAnimsLeftRight(bpy.types.Operator):
                         continue
                 mirror_acts.append((strip.action, flip_name, overriden))
 
+        with context.temp_override(area=view_area):
+            bpy.ops.pose.select_all(action='SELECT')
+
         for strip_act, flip_name, overriden in mirror_acts:
             blender_auto_common.mute_all_nla_tracks(rig_obj)
             status_str = "    Mirroring action: '" + strip_act.name + "' -> '" + flip_name + "'"
             if overriden:
                 status_str += " [OVERRIDING SAME NAME ACTION]"
             print(status_str)
-
             flipped_action = strip_act.copy()
             flipped_action.name = flip_name
             rig_obj.animation_data.action = flipped_action
-            with context.temp_override(area=view_area):
-                bpy.ops.pose.select_all(action='SELECT')  # select all bones
-            with context.temp_override(area=sheet_area):
-                #frame_start, frame_end = map(int, flipped_action.frame_range)
-                #for i in range(frame_start, frame_end + 1):
-                #    bpy.context.scene.frame_set(i)
-                #    bpy.ops.pose.copy()
-                #    bpy.ops.pose.paste(flipped=True)
-                #    bpy.ops.anim.keyframe_insert()
-                #    bpy.context.view_layer.update()
-                #copy current keyframes to paste flipped later
-                context.scene.frame_set(self.start_keyframe)
+            bpy.context.scene.frame_set(0)
+            with context.temp_override(area=sheet_area, region=sheet_area.regions[0]):
+                bpy.ops.anim.channels_select_all(action='SELECT')  # VERY IMPORTANT TO SELECT CHANNELS AS WELL AS KEYFRAMES!!!!!!
                 bpy.ops.action.select_all(action='SELECT')
                 bpy.ops.action.copy()
-                #bpy.ops.action.select_all(action='DESELECT')
-                #Delete all keyframes after keyframe 0 for the current action, to make sure that they don't interfere with
-                # the pasted keyframes, the first keyframe is guaranteed to be overwritten by pasted keyframes, and can't
-                # delete that one since we need channels to paste keys into
-                #context.scene.frame_set(self.start_keyframe + 1)
-                #bpy.ops.action.select_leftright(mode='RIGHT')
-                #bpy.ops.action.delete(confirm=False)
-                #paste key frames
-                #context.scene.frame_set(self.start_keyframe)
                 bpy.ops.action.paste(merge="OVER_ALL", flipped=True)
             flipped_action.use_fake_user = True
             blender_auto_common.push_action_to_nla(rig_obj, flipped_action.name)

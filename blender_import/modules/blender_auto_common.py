@@ -50,11 +50,16 @@ def switch_to_mode(obj, mode, context=None):
         bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode=mode)
 
-def get_first_screen_area_of_type(type, context):
+def get_first_screen_area_of_type(screen_type, context, make_sure_only=True):
+    return_area = None
+    counter = 0
     for area in context.screen.areas:
-        if area.type == type:
-            return area
-    return None
+        if area.type == screen_type:
+            counter += 1
+            return_area = area
+    if make_sure_only and counter > 1:
+        raise Exception("Multiple screen areas found for type: " + screen_type)
+    return return_area
 
 def find_object_in_mode(mode, raise_if_missing=True, context=None):
     """Find an object that is currently in a mode given by 'mode'.
