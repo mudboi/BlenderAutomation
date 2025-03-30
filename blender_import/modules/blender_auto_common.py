@@ -78,7 +78,6 @@ def find_object_in_mode(mode, raise_if_missing=True, context=None):
         raise Exception("Could not find any object in " + mode + " mode")
     return mode_obj
 
-
 def get_export_armature():
     """ Get first armature that is in a collection called 'Export' or None if one not found.
 
