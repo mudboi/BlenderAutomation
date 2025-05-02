@@ -50,7 +50,7 @@ def switch_to_mode(obj, mode, context=None):
         bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode=mode)
 
-def get_first_screen_area_of_type(screen_type, context, make_sure_only=True):
+def get_first_screen_area_of_type(screen_type, context, make_sure_only=False):
     return_area = None
     counter = 0
     for area in context.screen.areas:
