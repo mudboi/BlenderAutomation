@@ -143,7 +143,9 @@ class RetargetAnimsToRigify(bpy.types.Operator):
     3) The Rigify rig to needs to be the one in pose mode when this operator is run
     4) If use rest pose asset not enabled, will assume that current pose between source and dest armature are
         corresponding, or "Rest Pose" retargeting option selected and are corresponding. If use rest pose asset is
-        enabled, see description below """
+        enabled, see description below
+    5) Note if getting wierd results try putting armatures in these rest poses, even is use rest pose enabled, prior
+        to retarget for rigify, intermediate, and source rigs. Also make sure all NLA tracks are muted"""
 
     bl_idname = "anim.retarget_anims_to_rigify"  # How to ref class from blender python
     bl_label = "Retarget Animations to Rigify"  # Name in operator menu
@@ -161,8 +163,8 @@ class RetargetAnimsToRigify(bpy.types.Operator):
     use_rest_pose_asset: bpy.props.BoolProperty(name="Use Rest Pose", default=True,
         description="Applies a custom pose asset prior to rokoko retargeting to both source and dest rigs that should"
                     "put the two rigs into an identical rest pose. Useful for when source and dest rigs have different"
-                    "default rest poses (e.g. A-Pose vs T-Pose). There should be two pose assets defined with names"
-                    "_rest_[source_armature] and _rest_[dest_armature].")
+                    "default rest poses (e.g. A-Pose vs T-Pose). There should be two pose assets defined with names "
+                    "__rest_[source_armature] and __rest_[dest_armature or dest_intermediate_armature]  (note double underscore prefix).")
 
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=False,
         description="Whether to overwrite any actions that have the same name that the baked action will have")
