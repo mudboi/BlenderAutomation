@@ -434,3 +434,18 @@ def clear_action_stash():
     for track in nla_tracks:
         if '[Action Stash]' in track.name:
             nla_tracks.remove(track)
+
+
+def register():
+    """Registers this add-on to blender if user selected (called by blender). Since no custom classes in this script
+    no functionality here"""
+    pass
+
+def unregister():
+    """Unregisters this add-on is user de-selected. Since no custom classes in this script
+    no functionality here"""
+    pass
+
+
+if __name__ == '__main__':
+    register()

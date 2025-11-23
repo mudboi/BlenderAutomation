@@ -72,8 +72,6 @@ class CalcFootSpeed(bpy.types.Operator):
     bl_label = "Calc Foot Speed"  # Name in operator menu
     bl_options = {'REGISTER', 'UNDO'}  # Registers and enables undo
 
-    ctrl_rig_name: bpy.props.CollectionProperty(type=bpy.props.StringProperty, name="Ctrl Rig Name")
-
     @staticmethod
     def get_up_down_feet_markers(act):
         """"Return dict of marker prefixes with feet bone names, dict of up markers, dict of down marker,
